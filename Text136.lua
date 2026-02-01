@@ -1,21 +1,25 @@
---// DESYNC + TELEPORT AUTOMÁTICO
+--// DESYNC + TELEPORT OBJETOS
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
-local player = Players.LocalPlayer
 local Workspace = game:GetService("Workspace")
 
--- CONFIGURACIÓN
-local TELEPORT_POS = Vector3.new(1204.29, 355.53, -3143.72)
-local TELEPORT_INTERVAL = 0.5 -- cada 0.5s
+local player = Players.LocalPlayer
 
--- VARIABLES
+-- CONFIGURACIÓN
+local TELEPORT_INTERVAL = 0.5 -- cada 0.5s que se teletransportan los objetos
+local OBJECT_NAMES = {"Touch"} -- los nombres de los objetos que quieres teletransportar
+local PARENT_PATTERN = "^WinPart Z" -- patrón del padre (WinPart Z1, Z2...)
+
+-- VARIABLES DESYNC
 local invisOn = false
 local savedPos = nil
 local espPart = nil
 local seat = nil
 
--- FUNCIONES
+-- =========================
+-- FUNCIONES DESYNC
+-- =========================
 local function setTransparency(char, val)
 	for _, p in ipairs(char:GetDescendants()) do
 		if p:IsA("BasePart") and p.Name ~= "HumanoidRootPart" then
@@ -72,26 +76,59 @@ local function activateDesync()
 	createESP(savedPos)
 end
 
--- TELEPORT AUTOMÁTICO
-local function teleportLoop()
+-- =========================
+-- FUNCIONES TELETRANSPORT OBJETOS
+-- =========================
+local function getHRP()
 	local char = player.Character or player.CharacterAdded:Wait()
-	if not char then return end
-	local hrp = char:WaitForChild("HumanoidRootPart")
+	return char:WaitForChild("HumanoidRootPart")
+end
 
-	while true do
-		hrp.CFrame = CFrame.new(TELEPORT_POS)
-		task.wait(TELEPORT_INTERVAL)
+local function getObjectsToTeleport()
+	local objects = {}
+	for _, obj in ipairs(Workspace:GetDescendants()) do
+		if obj:IsA("BasePart") and table.find(OBJECT_NAMES, obj.Name)
+		   and obj.Parent and obj.Parent.Name:match(PARENT_PATTERN) then
+			table.insert(objects, obj)
+		end
+	end
+	return objects
+end
+
+local function teleportObjects()
+	local hrp = getHRP()
+	local objects = getObjectsToTeleport()
+	for _, obj in ipairs(objects) do
+		if obj and obj.Parent then
+			obj.Anchored = false
+			obj.CanCollide = false
+			obj.CFrame = hrp.CFrame * CFrame.new(0, 3, 0)
+		end
 	end
 end
 
--- EJECUTAR DESYNC + TELEPORT
+-- =========================
+-- LOOP TELETRANSPORTE
+-- =========================
+local function startTeleportLoop()
+	task.spawn(function()
+		while true do
+			teleportObjects()
+			task.wait(TELEPORT_INTERVAL)
+		end
+	end)
+end
+
+-- =========================
+-- EJECUTAR TODO
+-- =========================
 task.spawn(function()
-	activateDesync()        -- Paso 1: activar desync/invisible
-	task.wait(0.5)          -- Espera 0.5s
-	teleportLoop()           -- Paso 2: iniciar teleport cada 0.5s
+	activateDesync()      -- Paso 1: activar desync
+	task.wait(0.5)        -- Espera 0.5s
+	startTeleportLoop()   -- Paso 2: iniciar teleport de objetos
 end)
 
--- OPCIONAL: mantener invisible al reaparecer
+-- OPCIONAL: mantener desync al reaparecer
 player.CharacterAdded:Connect(function(char)
 	task.wait(1)
 	if invisOn then
